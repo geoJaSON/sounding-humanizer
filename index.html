@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Sounding Humanizer — Atmospheric Profiles Made Intuitive</title>
+  <meta name="description"
+    content="Fetch upper-air sounding data and get intuitive visualizations with plain-language weather briefings." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <div id="app">
+    <!-- Top Nav -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo">
+          <svg class="logo-icon" viewBox="0 0 32 32" width="28" height="28">
+            <path d="M16 4 C11 4 8 9 8 14 C8 20 14.5 26 15 28 L17 28 C17.5 26 24 20 24 14 C24 9 21 4 16 4 Z"
+              fill="url(#grad1)" opacity="0.9" />
+            <path d="M16 28 L16 32 M13 32 L19 32" stroke="url(#grad2)" stroke-width="1.5" stroke-linecap="round" />
+            <circle cx="16" cy="12" r="4" fill="none" stroke="white" stroke-width="1.5" opacity="0.6" />
+            <defs>
+              <linearGradient id="grad1" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#818cf8" />
+              </linearGradient>
+              <linearGradient id="grad2" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0%" stop-color="#94a3b8" />
+                <stop offset="100%" stop-color="#cbd5e1" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <h1 class="logo-text"> Weather Sounding <span class="accent">Humanizer</span></h1>
+        </div>
+      </div>
+      <div class="header-right" id="header-controls" style="display:none;">
+        <button id="btn-new-fetch" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path
+              d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+          </svg>
+          Fetch New Sounding
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+      <!-- Fetch form (landing state) -->
+      <div class="fetch-landing" id="fetch-landing">
+        <div class="empty-icon">
+          <svg viewBox="0 0 120 120" width="120" height="120">
+            <!-- decorative atmosphere lines -->
+            <path d="M10 90 Q 30 80, 60 90 T 110 90" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2" />
+            <path d="M20 70 Q 50 60, 80 70 T 130 70" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2" />
+            <!-- cloud -->
+            <path d="M30 65 Q 30 55, 40 55 Q 45 40, 60 40 Q 75 40, 80 55 Q 90 55, 90 65 Z" fill="rgba(255,255,255,0.05)"
+              stroke="rgba(255,255,255,0.1)" stroke-width="2" />
+            <!-- weather balloon ascending -->
+            <path d="M60 15 C45 15 38 25 38 40 C38 52 56 68 58 72 L62 72 C64 68 82 52 82 40 C82 25 75 15 60 15 Z"
+              fill="url(#emptyGrad)" opacity="0.8" />
+            <path d="M60 72 L60 85 M53 85 L67 85 M56 79 L64 79" stroke="url(#emptyGrad2)" stroke-width="2"
+              stroke-linecap="round" />
+            <circle cx="60" cy="35" r="8" fill="none" stroke="white" stroke-width="2" opacity="0.6" />
+            <defs>
+              <linearGradient id="emptyGrad" x1="0" y1="0" x2="120" y2="0">
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#818cf8" />
+              </linearGradient>
+              <linearGradient id="emptyGrad2" x1="0" y1="0" x2="120" y2="120">
+                <stop offset="0%" stop-color="#94a3b8" />
+                <stop offset="100%" stop-color="#cbd5e1" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h2>Fetch a Sounding</h2>
+        <p>Select a station and date to pull upper-air data from the University of Wyoming archive.</p>
+
+        <div class="fetch-card">
+          <div class="fetch-form">
+            <div class="form-row">
+              <div class="form-group form-group-station">
+                <label for="fetch-station">Station</label>
+                <select id="fetch-station">
+                  <!-- Populated by JS from stations.js -->
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="fetch-date">Date</label>
+                <input type="date" id="fetch-date" />
+              </div>
+              <div class="form-group">
+                <label for="fetch-hour">Hour (UTC)</label>
+                <select id="fetch-hour">
+                  <option value="00">00Z</option>
+                  <option value="12" selected>12Z</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="fetch-actions">
+            <button id="btn-fetch-submit" class="btn btn-primary btn-lg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              </svg>
+              Fetch &amp; Analyze
+            </button>
+          </div>
+          <div class="fetch-error hidden" id="fetch-error"></div>
+        </div>
+      </div>
+
+      <!-- Data view (hidden initially) -->
+      <div class="data-view hidden" id="data-view">
+        <!-- Station info bar -->
+        <div class="station-bar" id="station-bar">
+          <div class="station-info">
+            <span class="station-name" id="station-name">—</span>
+            <span class="station-time" id="station-time">—</span>
+          </div>
+          <div class="severity-badge" id="severity-badge">
+            <span class="badge-dot"></span>
+            <span class="badge-text">—</span>
+          </div>
+        </div>
+
+        <!-- Diagrams row -->
+        <div class="diagrams-row">
+          <div class="diagram-panel" id="skewt-panel">
+            <div class="panel-header">
+              <h3>Skew-T / Log-P</h3>
+              <div class="panel-info" id="skewt-hover-info"></div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="skewt-canvas"></canvas>
+            </div>
+          </div>
+          <div class="diagram-panel" id="hodo-panel">
+            <div class="panel-header">
+              <h3>Hodograph</h3>
+              <div class="panel-info" id="hodo-hover-info"></div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="hodo-canvas"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Parameters bar -->
+        <div class="params-bar" id="params-bar">
+          <!-- Filled by JS -->
+        </div>
+
+        <!-- Analysis section -->
+        <div class="analysis-section" id="analysis-section">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
