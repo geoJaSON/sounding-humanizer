@@ -228,7 +228,7 @@ function renderParams(a) {
     const params = [
         { label: 'SBCAPE', value: a.sbcape, unit: 'J/kg', max: 6000, color: capeColor(a.sbcape), desc: 'Surface-Based Convective Available Potential Energy. Measures total instability for air parcels originating from the surface.' },
         { label: 'MLCAPE', value: a.mlcape, unit: 'J/kg', max: 6000, color: capeColor(a.mlcape), desc: 'Mixed-Layer CAPE. Measures instability for air parcels mixed over the lowest 100 mb, often a better representation of afternoon storm potential.' },
-        { label: 'CIN', value: a.sbcin, unit: 'J/kg', max: 300, color: '#3b82f6', desc: 'Convective Inhibition. The negative energy or "cap" that suppresses rising parcels. Large negative values mean a strong cap and fewer storms; near-zero means storms can form easily.' },
+        { label: 'CIN', value: a.sbcin, unit: 'J/kg', max: 300, color: '#3b82f6', desc: 'Convective Inhibition. The negative energy or cap that suppresses rising parcels. Large negative values mean a strong cap and fewer storms; near-zero means storms can form easily.' },
         { label: 'LCL', value: a.lclHeight, unit: 'm', max: 3000, color: '#06b6d4', desc: 'Lifted Condensation Level. The estimated height of cloud bases. Lower LCLs (under 1000m) are generally more favorable for tornadoes.' },
         { label: '0-6km Shear', value: a.shear06, unit: 'kt', max: 80, color: shearColor(a.shear06), desc: 'Deep-layer wind shear. Critical for thunderstorm organization and supercell development.' },
         { label: '0-1km Shear', value: a.shear01, unit: 'kt', max: 50, color: shearColor(a.shear01), desc: 'Low-level wind shear. Important for low-level mesocyclone and tornado potential.' },
