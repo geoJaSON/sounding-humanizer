@@ -313,7 +313,7 @@ function shearLevel(shear06, srh03) {
         + (srh03 >= 300 ? 3 : srh03 >= 150 ? 2 : srh03 >= 50 ? 1 : 0);
     if (score >= 5) return { label: 'Extreme', color: '#a855f7' };
     if (score >= 4) return { label: 'High', color: '#ef4444' };
-    if (score >= 2) return { label: 'Enhanced', color: '#f97316' };
+    if (score >= 3) return { label: 'Enhanced', color: '#f97316' };
     if (score >= 1) return { label: 'Marginal', color: '#eab308' };
     return { label: 'Low', color: '#22c55e' };
 }
