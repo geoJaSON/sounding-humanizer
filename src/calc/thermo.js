@@ -174,6 +174,10 @@ function calcCAPE_CIN(levels, parcel) {
     for (let i = 0; i < parcel.length - 1; i++) {
         const p1 = parcel[i].pressure;
         const p2 = parcel[i + 1].pressure;
+
+        // Stop integration above 100 hPa to avoid stratospheric contamination
+        if (p2 < 100) break;
+
         const parcelT1 = CtoK(parcel[i].temp);
         const parcelT2 = CtoK(parcel[i + 1].temp);
 
@@ -202,9 +206,13 @@ function calcCAPE_CIN(levels, parcel) {
             }
             el = { pressure: p2, height: z2 };
         } else {
+            // Only accumulate CIN below the LFC
             if (!lfc) cin += energy;
         }
     }
+
+    // If no LFC was found, there is no convective inhibition to report
+    if (!lfc) cin = 0;
 
     return { cape: Math.max(0, cape), cin: Math.min(0, cin), lfc, el };
 }
