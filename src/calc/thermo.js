@@ -20,23 +20,33 @@ function ktsToMs(kts) { return kts * 0.51444; }
 /**
  * Saturation vapor pressure (Bolton 1980) in hPa
  */
-function es(tc) {
+export function es(tc) {
     return 6.112 * Math.exp((17.67 * tc) / (tc + 243.5));
 }
 
 /**
  * Mixing ratio in g/kg given temperature (°C) and pressure (hPa)
  */
-function mixingRatio(tc, p) {
+export function mixingRatio(tc, p) {
     const e = es(tc);
     return (1000 * eps * e) / (p - e);
 }
 
 /**
- * Virtual temperature in K
+ * Virtual temperature in K from temperature (°C), dewpoint (°C), pressure (hPa).
+ * Used for the environment, whose vapor content is set by its dewpoint.
  */
-function virtualTemp(tc, tdc, p) {
+export function virtualTemp(tc, tdc, p) {
     const w = mixingRatio(tdc, p) / 1000; // kg/kg
+    return CtoK(tc) * (1 + 0.61 * w);
+}
+
+/**
+ * Virtual temperature in K from temperature (°C) and a known mixing ratio (kg/kg).
+ * Used for a lifted parcel, whose vapor content is carried with it rather than
+ * implied by a dewpoint.
+ */
+export function virtualTempFromW(tc, w) {
     return CtoK(tc) * (1 + 0.61 * w);
 }
 
@@ -54,7 +64,7 @@ function thetaE(tc, tdc, p) {
 /**
  * Temperature at LCL (K) using Bolton approximation
  */
-function lclTemp(tc, tdc) {
+export function lclTemp(tc, tdc) {
     const tk = CtoK(tc);
     const tdk = CtoK(tdc);
     return 1 / (1 / (tdk - 56) + Math.log(tk / tdk) / 800) + 56;
@@ -63,7 +73,7 @@ function lclTemp(tc, tdc) {
 /**
  * LCL pressure using Poisson equation
  */
-function lclPressure(tc, tdc, p) {
+export function lclPressure(tc, tdc, p) {
     const tlcl = lclTemp(tc, tdc);
     const tk = CtoK(tc);
     return p * Math.pow(tlcl / tk, 1 / 0.2854);
@@ -103,22 +113,26 @@ function moistAdiabat(tc, pStart, pEnd, steps = 200) {
 function liftParcel(tSfc, tdSfc, pSfc, levels) {
     const pLCL = lclPressure(tSfc, tdSfc, pSfc);
     const tLCL = KtoC(lclTemp(tSfc, tdSfc));
+    // Mixing ratio of the source parcel — conserved during dry (sub-LCL) ascent.
+    const wSource = mixingRatio(tdSfc, pSfc) / 1000; // kg/kg
 
     const parcel = [];
 
     for (const lev of levels) {
         if (lev.pressure > pSfc) continue;
 
-        let parcelT;
+        let parcelT, w;
         if (lev.pressure >= pLCL) {
-            // Below LCL: dry adiabat
+            // Below LCL: dry adiabat, unsaturated — carries the source mixing ratio
             parcelT = dryAdiabat(tSfc, pSfc, lev.pressure);
+            w = wSource;
         } else {
-            // Above LCL: moist adiabat
+            // Above LCL: moist adiabat, saturated — mixing ratio = saturation value
             parcelT = moistAdiabat(tLCL, pLCL, lev.pressure);
+            w = mixingRatio(parcelT, lev.pressure) / 1000;
         }
 
-        parcel.push({ pressure: lev.pressure, temp: parcelT });
+        parcel.push({ pressure: lev.pressure, temp: parcelT, w });
     }
 
     return { parcel, pLCL, tLCL };
@@ -178,18 +192,22 @@ function calcCAPE_CIN(levels, parcel) {
         // Stop integration above 100 hPa to avoid stratospheric contamination
         if (p2 < 100) break;
 
-        const parcelT1 = CtoK(parcel[i].temp);
-        const parcelT2 = CtoK(parcel[i + 1].temp);
-
+        // Buoyancy is computed from virtual temperature (Doswell & Rasmussen
+        // 1994): the moist parcel is less dense than its temperature alone implies,
+        // and the correction can add hundreds of J/kg of CAPE in humid profiles.
         const envT1 = interpAtPressure(levels, p1, 'temp');
         const envT2 = interpAtPressure(levels, p2, 'temp');
-        if (envT1 === null || envT2 === null) continue;
+        const envTd1 = interpAtPressure(levels, p1, 'dewpoint');
+        const envTd2 = interpAtPressure(levels, p2, 'dewpoint');
+        if (envT1 === null || envT2 === null || envTd1 === null || envTd2 === null) continue;
 
-        const envTv1 = CtoK(envT1);
-        const envTv2 = CtoK(envT2);
+        const parcelTv1 = virtualTempFromW(parcel[i].temp, parcel[i].w);
+        const parcelTv2 = virtualTempFromW(parcel[i + 1].temp, parcel[i + 1].w);
+        const envTv1 = virtualTemp(envT1, envTd1, p1);
+        const envTv2 = virtualTemp(envT2, envTd2, p2);
 
-        const buoy1 = (parcelT1 - envTv1) / envTv1;
-        const buoy2 = (parcelT2 - envTv2) / envTv2;
+        const buoy1 = (parcelTv1 - envTv1) / envTv1;
+        const buoy2 = (parcelTv2 - envTv2) / envTv2;
         const avgBuoy = (buoy1 + buoy2) / 2;
 
         const z1 = heightAtPressure(levels, p1);
@@ -261,7 +279,7 @@ function mostUnstableParcel(levels) {
 /**
  * Wind components (u, v) in m/s from direction and speed in knots
  */
-function windComponents(dir, spd) {
+export function windComponents(dir, spd) {
     const spdMs = ktsToMs(spd);
     const rad = (dir * Math.PI) / 180;
     return {
@@ -290,21 +308,38 @@ function meanWind(levels, pBot, pTop) {
 }
 
 /**
+ * Interpolate the wind vector (u, v in m/s) at a target pressure.
+ * Interpolates the u/v components rather than direction/speed — interpolating
+ * degrees linearly is wrong across the 0°/360° wrap (e.g. 350° and 10° would
+ * average to 180°, the exact opposite direction).
+ */
+function windAtPressure(levels, pTarget) {
+    for (let i = 0; i < levels.length - 1; i++) {
+        const a = levels[i], b = levels[i + 1];
+        if ((a.pressure >= pTarget && b.pressure <= pTarget) ||
+            (a.pressure <= pTarget && b.pressure >= pTarget)) {
+            const frac = (Math.log(pTarget) - Math.log(a.pressure)) / (Math.log(b.pressure) - Math.log(a.pressure));
+            const ua = windComponents(a.windDir, a.windSpd);
+            const ub = windComponents(b.windDir, b.windSpd);
+            return {
+                u: ua.u + frac * (ub.u - ua.u),
+                v: ua.v + frac * (ub.v - ua.v),
+            };
+        }
+    }
+    return null;
+}
+
+/**
  * Bulk wind shear between two height layers (m AGL)
  */
-function bulkShear(levels, hBot, hTop) {
+export function bulkShear(levels, hBot, hTop) {
     const pBot = pressureAtHeight(levels, hBot);
     const pTop = pressureAtHeight(levels, hTop);
 
-    const dirBot = interpAtPressure(levels, pBot, 'windDir');
-    const spdBot = interpAtPressure(levels, pBot, 'windSpd');
-    const dirTop = interpAtPressure(levels, pTop, 'windDir');
-    const spdTop = interpAtPressure(levels, pTop, 'windSpd');
-
-    if (dirBot == null || spdBot == null || dirTop == null || spdTop == null) return { mag: 0, u: 0, v: 0 };
-
-    const bot = windComponents(dirBot, spdBot);
-    const top = windComponents(dirTop, spdTop);
+    const bot = windAtPressure(levels, pBot);
+    const top = windAtPressure(levels, pTop);
+    if (!bot || !top) return { mag: 0, u: 0, v: 0 };
 
     const du = top.u - bot.u;
     const dv = top.v - bot.v;
@@ -410,25 +445,54 @@ function precipitableWater(levels) {
 }
 
 /**
- * Calculate Significant Tornado Parameter (STP)
+ * Significant Tornado Parameter (STP), SPC fixed-layer formulation.
+ * @param {number} sbcape   Surface-based CAPE (J/kg)
+ * @param {number} lcl      Surface-based LCL height (m AGL)
+ * @param {number} srh01    0-1 km storm-relative helicity (m²/s²)
+ * @param {number} shear06  0-6 km bulk shear in METERS PER SECOND
+ * @param {number} cin      Surface-based CIN (J/kg, negative)
  */
-function calcSTP(sbcape, lcl, srh01, shear06, cin) {
-    const lclTerm = lcl < 1000 ? ((2000 - lcl) / 1000) : (lcl < 2000 ? ((2000 - lcl) / 1000) : 0);
-    const shearTerm = Math.min(shear06 / 20, 1.5);
-    const cinTerm = cin > -50 ? 1 : (cin > -150 ? ((200 + cin) / 150) : 0);
+export function calcSTP(sbcape, lcl, srh01, shear06, cin) {
     const capeTerm = sbcape / 1500;
     const srhTerm = srh01 / 150;
+
+    // LCL term: 1.0 at/below 1000 m, 0.0 at/above 2000 m, linear between
+    let lclTerm;
+    if (lcl < 1000) lclTerm = 1.0;
+    else if (lcl > 2000) lclTerm = 0.0;
+    else lclTerm = (2000 - lcl) / 1000;
+
+    // Shear term: 0 below 12.5 m/s, capped at 1.5 above 30 m/s, BWD/20 between
+    let shearTerm;
+    if (shear06 < 12.5) shearTerm = 0.0;
+    else if (shear06 > 30) shearTerm = 1.5;
+    else shearTerm = shear06 / 20;
+
+    // CIN term: 1.0 above -50, 0.0 below -200, (200+CIN)/150 between
+    let cinTerm;
+    if (cin > -50) cinTerm = 1.0;
+    else if (cin < -200) cinTerm = 0.0;
+    else cinTerm = (200 + cin) / 150;
 
     return capeTerm * lclTerm * srhTerm * shearTerm * cinTerm;
 }
 
 /**
- * Calculate Supercell Composite Parameter (SCP)
+ * Supercell Composite Parameter (SCP), Thompson et al. fixed-layer form.
+ * @param {number} mucape   Most-unstable CAPE (J/kg)
+ * @param {number} srh03    0-3 km storm-relative helicity (m²/s²)
+ * @param {number} shear06  0-6 km bulk shear in METERS PER SECOND
  */
-function calcSCP(mucape, srh03, shear06) {
+export function calcSCP(mucape, srh03, shear06) {
     const capeTerm = mucape / 1000;
     const srhTerm = srh03 / 100;
-    const shearTerm = shear06 / 20;
+
+    // Shear term: 0 below 10 m/s, capped at 1.0 above 20 m/s, BWD/20 between
+    let shearTerm;
+    if (shear06 < 10) shearTerm = 0.0;
+    else if (shear06 > 20) shearTerm = 1.0;
+    else shearTerm = shear06 / 20;
+
     return capeTerm * srhTerm * shearTerm;
 }
 
@@ -481,8 +545,9 @@ export function analyzeSounding(levels) {
     const pw = precipitableWater(levels);
 
     // ---- Composite Parameters ----
-    const stp = calcSTP(sbResult.cape, lclAGL, srh01, shear06.mag * 1.94384, sbResult.cin);
-    const scp = calcSCP(muResult.cape, srh03, shear06.mag * 1.94384);
+    // STP/SCP shear terms are defined in m/s — pass the magnitude directly.
+    const stp = calcSTP(sbResult.cape, lclAGL, srh01, shear06.mag, sbResult.cin);
+    const scp = calcSCP(muResult.cape, srh03, shear06.mag);
 
     // ---- Parcel paths for plotting ----
     return {

@@ -10,6 +10,7 @@ import { SkewTDiagram } from './viz/skewt.js';
 import { HodographDiagram } from './viz/hodograph.js';
 import { humanize } from './analysis/humanizer.js';
 import { resolveStation, populateStationDropdown } from './data/stations.js';
+import { SAMPLE_SOUNDINGS, getSampleList } from './data/samples.js';
 
 // ---- DOM refs ----
 const fetchLanding = document.getElementById('fetch-landing');
@@ -55,12 +56,38 @@ function init() {
         const d = String(targetDate.getUTCDate()).padStart(2, '0');
         dateInput.value = `${y}-${m}-${d}`;
         hourSelect.value = targetHour;
+
+        // Cap the picker at today (UTC) — future soundings don't exist, and
+        // picking one only yields a confusing server error.
+        const ty = now.getUTCFullYear();
+        const tm = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const td = String(now.getUTCDate()).padStart(2, '0');
+        dateInput.max = `${ty}-${tm}-${td}`;
     }
 
     // Populate station dropdown
     const stationSelect = document.getElementById('fetch-station');
     if (stationSelect) {
         populateStationDropdown(stationSelect, 'OUN');
+    }
+
+    // Populate example soundings
+    const examplesRow = document.getElementById('examples-row');
+    if (examplesRow) {
+        for (const sample of getSampleList()) {
+            const btn = document.createElement('button');
+            btn.className = 'btn-example';
+            btn.type = 'button';
+            const station = document.createElement('span');
+            station.className = 'example-station';
+            station.textContent = sample.station;
+            const desc = document.createElement('span');
+            desc.className = 'example-desc';
+            desc.textContent = sample.description;
+            btn.append(station, desc);
+            btn.addEventListener('click', () => loadSample(sample.key));
+            examplesRow.appendChild(btn);
+        }
     }
 
     // Fetch submit
@@ -161,6 +188,24 @@ async function handleFetch() {
     }
 }
 
+// ---- Load a bundled example sounding (no network) ----
+function loadSample(key) {
+    const sample = SAMPLE_SOUNDINGS[key];
+    if (!sample) {
+        showError('Example data not found.');
+        return;
+    }
+    hideError();
+
+    const parsed = parseSounding(sample.raw, sample.station, sample.time);
+    if (parsed.levels.length < 5) {
+        showError('Could not parse the example sounding.');
+        return;
+    }
+
+    processData(parsed);
+}
+
 function monthName(m) {
     return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] || '';
 }
@@ -198,6 +243,15 @@ function processData(parsed) {
     const sev = humanized.severity;
     severityBadge.dataset.level = sev.level;
     severityBadge.querySelector('.badge-text').textContent = `${sev.label} Risk`;
+
+    // Enrich the canvas labels for screen readers with the actual figures.
+    const station = parsed.station || 'this station';
+    document.getElementById('skewt-canvas')?.setAttribute('aria-label',
+        `Skew-T log-P diagram for ${station}. SBCAPE ${analysis.sbcape} joules per kilogram, ` +
+        `CIN ${analysis.sbcin} joules per kilogram, LCL ${analysis.lclHeight} meters. ${sev.label} severe risk.`);
+    document.getElementById('hodo-canvas')?.setAttribute('aria-label',
+        `Hodograph for ${station}. 0 to 6 kilometer bulk shear ${analysis.shear06} knots, ` +
+        `0 to 1 kilometer storm-relative helicity ${analysis.srh01} square meters per second squared.`);
 
     // Init diagrams
     if (!skewtDiagram) {
@@ -242,14 +296,26 @@ function renderParams(a) {
 
     paramsBar.innerHTML = params.map(p => {
         const pct = Math.min(100, Math.abs(parseFloat(p.value)) / p.max * 100);
+        // Focusable + labelled so the description (previously a mouse-only title
+        // tooltip) is reachable by keyboard and screen readers.
+        const aria = esc(`${p.label}: ${p.value}${p.unit ? ' ' + p.unit : ''}. ${p.desc}`);
         return `
-      <div class="param-card" title="${p.desc}">
+      <div class="param-card" tabindex="0" title="${esc(p.desc)}" aria-label="${aria}">
         <div class="param-label">${p.label}</div>
         <div class="param-value">${p.value}<span class="param-unit">${p.unit}</span></div>
         <div class="param-bar" style="width:${pct}%;background:${p.color};"></div>
       </div>
     `;
     }).join('');
+}
+
+/** Escape a string for safe interpolation into an HTML attribute. */
+function esc(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 function capeColor(c) {

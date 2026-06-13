@@ -117,6 +117,14 @@
           </div>
           <div class="fetch-error hidden" id="fetch-error"></div>
         </div>
+
+        <!-- Example soundings — explore the app without a live fetch -->
+        <div class="fetch-examples">
+          <div class="examples-divider"><span>or explore an example</span></div>
+          <div class="examples-row" id="examples-row">
+            <!-- Populated by JS from samples.js -->
+          </div>
+        </div>
       </div>
 
       <!-- Data view (hidden initially) -->
@@ -141,7 +149,8 @@
               <div class="panel-info" id="skewt-hover-info"></div>
             </div>
             <div class="canvas-wrap">
-              <canvas id="skewt-canvas"></canvas>
+              <canvas id="skewt-canvas" role="img"
+                aria-label="Skew-T log-P diagram showing temperature and dewpoint profiles with the lifted parcel path."></canvas>
             </div>
           </div>
           <div class="diagram-panel" id="hodo-panel">
@@ -150,7 +159,8 @@
               <div class="panel-info" id="hodo-hover-info"></div>
             </div>
             <div class="canvas-wrap">
-              <canvas id="hodo-canvas"></canvas>
+              <canvas id="hodo-canvas" role="img"
+                aria-label="Hodograph showing the wind profile with height and storm-motion vectors."></canvas>
             </div>
           </div>
         </div>

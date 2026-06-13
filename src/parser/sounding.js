@@ -83,12 +83,17 @@ export function parseSounding(text, stationName = 'Unknown', time = '') {
             [pres, hght, temp, dwpt, drct, sknt] = nums;
         }
 
-        // Sanity checks
+        // A level may carry thermo data but no wind (fewer columns than the
+        // header). Those fields come back as undefined here; emitting them would
+        // feed NaN into the hodograph and shear/SRH math, so require all six.
+        if (![pres, hght, temp, dwpt, drct, sknt].every(Number.isFinite)) continue;
+
+        // Sanity / missing-value (e.g. 9999 sentinel) checks
         if (pres < 50 || pres > 1100) continue;
         if (temp < -100 || temp > 60) continue;
         if (dwpt < -100 || dwpt > 60) continue;
-        // Some datasets use 9999 for missing
-        if (temp > 9990 || dwpt > 9990) continue;
+        if (drct < 0 || drct > 360) continue;
+        if (sknt < 0 || sknt > 250) continue;
 
         levels.push({
             pressure: pres,

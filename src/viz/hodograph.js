@@ -22,11 +22,19 @@ export class HodographDiagram {
         this.analysis = null;
         this.hoverIdx = -1;
         this.padding = 50;
+        this.dpr = 1;
+        // Offscreen cache of everything except the hover crosshair (see SkewT).
+        this._cache = null;
 
         this._onMouseMove = this._onMouseMove.bind(this);
         this._onMouseLeave = this._onMouseLeave.bind(this);
+        this._onTouchMove = this._onTouchMove.bind(this);
+        this._onTouchEnd = this._onTouchEnd.bind(this);
         canvas.addEventListener('mousemove', this._onMouseMove);
         canvas.addEventListener('mouseleave', this._onMouseLeave);
+        canvas.addEventListener('touchstart', this._onTouchMove, { passive: true });
+        canvas.addEventListener('touchmove', this._onTouchMove, { passive: true });
+        canvas.addEventListener('touchend', this._onTouchEnd);
     }
 
     setData(levels, analysis) {
@@ -38,9 +46,15 @@ export class HodographDiagram {
     _resize() {
         const rect = this.canvas.parentElement.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
+        const w = Math.round(rect.width * dpr);
+        const h = Math.round(rect.height * dpr);
+        if (this.canvas.width !== w || this.canvas.height !== h) {
+            this.canvas.width = w;
+            this.canvas.height = h;
+            this._cache = null;
+        }
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.dpr = dpr;
         this.W = rect.width;
         this.H = rect.height;
         this.size = Math.min(this.W, this.H);
@@ -61,8 +75,21 @@ export class HodographDiagram {
 
     draw() {
         this._resize();
-        const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.W, this.H);
+        this._renderCache();
+        this._composite();
+    }
+
+    // Render rings, axes, trace and storm motion into an offscreen canvas; only
+    // rebuilt when data or size changes, not on hover.
+    _renderCache() {
+        if (!this._cache) this._cache = document.createElement('canvas');
+        this._cache.width = this.canvas.width;
+        this._cache.height = this.canvas.height;
+
+        const real = this.ctx;
+        const cctx = this._cache.getContext('2d');
+        cctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this.ctx = cctx;
 
         this._drawBackground();
         this._drawRings();
@@ -76,6 +103,17 @@ export class HodographDiagram {
             this._drawHeightLabels();
         }
 
+        this.ctx = real;
+    }
+
+    // Blit the cache and draw the dynamic hover crosshair on top.
+    _composite() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this._cache) ctx.drawImage(this._cache, 0, 0);
+        ctx.restore();
         this._drawHover();
     }
 
@@ -202,7 +240,7 @@ export class HodographDiagram {
 
             ctx.fillStyle = this._getLayerColor(agl);
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, i === this.hoverIdx ? 5 : 3, 0, Math.PI * 2);
+            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
             ctx.fill();
         }
     }
@@ -312,13 +350,24 @@ export class HodographDiagram {
         ctx.lineTo(this.cx + this.radius, pt.y);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        // Highlight the hovered level (the trace dots live in the cached layer, so
+        // the enlarged marker is drawn here on the overlay instead).
+        const agl = l.height - (this.analysis ? this.analysis.sfcHeight : 0);
+        ctx.fillStyle = this._getLayerColor(agl);
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
     }
 
-    _onMouseMove(e) {
+    _setHoverFromXY(clientX, clientY) {
         if (!this.data) return;
         const rect = this.canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const mx = clientX - rect.left;
+        const my = clientY - rect.top;
 
         // Find closest level
         let closest = -1;
@@ -337,15 +386,28 @@ export class HodographDiagram {
         }
 
         this.hoverIdx = closest;
-        this.draw();
+        // Cache is unchanged on hover — re-composite only.
+        this._composite();
         this._emitHover();
+    }
+
+    _onMouseMove(e) {
+        this._setHoverFromXY(e.clientX, e.clientY);
+    }
+
+    _onTouchMove(e) {
+        if (e.touches && e.touches[0]) this._setHoverFromXY(e.touches[0].clientX, e.touches[0].clientY);
     }
 
     _onMouseLeave() {
         this.hoverIdx = -1;
-        this.draw();
+        this._composite();
         const infoEl = document.getElementById('hodo-hover-info');
         if (infoEl) infoEl.textContent = '';
+    }
+
+    _onTouchEnd() {
+        this._onMouseLeave();
     }
 
     _emitHover() {
@@ -366,5 +428,8 @@ export class HodographDiagram {
     destroy() {
         this.canvas.removeEventListener('mousemove', this._onMouseMove);
         this.canvas.removeEventListener('mouseleave', this._onMouseLeave);
+        this.canvas.removeEventListener('touchstart', this._onTouchMove);
+        this.canvas.removeEventListener('touchmove', this._onTouchMove);
+        this.canvas.removeEventListener('touchend', this._onTouchEnd);
     }
 }

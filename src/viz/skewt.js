@@ -17,11 +17,21 @@ export class SkewTDiagram {
         this.analysis = null;
         this.hoverP = null;
         this.padding = { top: 30, right: 55, bottom: 30, left: 50 };
+        this.dpr = 1;
+        // Offscreen cache of the static grid + data traces. Everything except the
+        // hover line is identical between mouse moves, so we render it once and
+        // just blit it on hover instead of recomputing adiabats every frame.
+        this._cache = null;
 
         this._onMouseMove = this._onMouseMove.bind(this);
         this._onMouseLeave = this._onMouseLeave.bind(this);
+        this._onTouchMove = this._onTouchMove.bind(this);
+        this._onTouchEnd = this._onTouchEnd.bind(this);
         canvas.addEventListener('mousemove', this._onMouseMove);
         canvas.addEventListener('mouseleave', this._onMouseLeave);
+        canvas.addEventListener('touchstart', this._onTouchMove, { passive: true });
+        canvas.addEventListener('touchmove', this._onTouchMove, { passive: true });
+        canvas.addEventListener('touchend', this._onTouchEnd);
     }
 
     setData(levels, analysis) {
@@ -33,11 +43,19 @@ export class SkewTDiagram {
     _resize() {
         const rect = this.canvas.parentElement.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
+        const w = Math.round(rect.width * dpr);
+        const h = Math.round(rect.height * dpr);
+        // Reassigning width/height clears the canvas and resets the transform, so
+        // only do it when the size actually changed (and invalidate the cache).
+        if (this.canvas.width !== w || this.canvas.height !== h) {
+            this.canvas.width = w;
+            this.canvas.height = h;
+            this._cache = null;
+        }
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.W = rect.width;
         this.H = rect.height;
+        this.dpr = dpr;
     }
 
     // Convert pressure to y-coordinate (log scale)
@@ -71,10 +89,27 @@ export class SkewTDiagram {
         return left + (t - TMIN) / tRange * w + skewOffset;
     }
 
+    // Full render: rebuild the cached layer, then composite it with the hover line.
     draw() {
         this._resize();
-        const ctx = this.ctx;
-        ctx.clearRect(0, 0, this.W, this.H);
+        this._renderCache();
+        this._composite();
+    }
+
+    // Render the static grid + data traces into an offscreen canvas. This is the
+    // expensive part (adiabats, traces, CAPE/CIN shading) and only needs to run
+    // when the data or canvas size changes — never on hover.
+    _renderCache() {
+        if (!this._cache) this._cache = document.createElement('canvas');
+        this._cache.width = this.canvas.width;
+        this._cache.height = this.canvas.height;
+
+        // Temporarily redirect the drawing methods at the cache context so the
+        // existing _drawX helpers can be reused unchanged.
+        const real = this.ctx;
+        const cctx = this._cache.getContext('2d');
+        cctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        this.ctx = cctx;
 
         this._drawBackground();
         this._drawIsobars();
@@ -90,6 +125,17 @@ export class SkewTDiagram {
             this._drawMarkers();
         }
 
+        this.ctx = real;
+    }
+
+    // Cheap per-frame path: blit the cache and draw the dynamic hover line on top.
+    _composite() {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this._cache) ctx.drawImage(this._cache, 0, 0);
+        ctx.restore();
         this._drawHoverLine();
     }
 
@@ -413,24 +459,34 @@ export class SkewTDiagram {
         ctx.setLineDash([]);
     }
 
-    _onMouseMove(e) {
+    _setHoverFromY(clientY) {
         const rect = this.canvas.getBoundingClientRect();
-        const y = e.clientY - rect.top;
-        this.hoverP = this.yToP(y);
-
+        this.hoverP = this.yToP(clientY - rect.top);
         if (this.hoverP < PMIN || this.hoverP > PMAX) {
             this.hoverP = null;
         }
-
-        this.draw();
+        // Cache is unchanged on hover — just re-composite, don't re-render it.
+        this._composite();
         this._emitHover();
+    }
+
+    _onMouseMove(e) {
+        this._setHoverFromY(e.clientY);
+    }
+
+    _onTouchMove(e) {
+        if (e.touches && e.touches[0]) this._setHoverFromY(e.touches[0].clientY);
     }
 
     _onMouseLeave() {
         this.hoverP = null;
-        this.draw();
+        this._composite();
         const infoEl = document.getElementById('skewt-hover-info');
         if (infoEl) infoEl.textContent = '';
+    }
+
+    _onTouchEnd() {
+        this._onMouseLeave();
     }
 
     _emitHover() {
@@ -460,5 +516,8 @@ export class SkewTDiagram {
     destroy() {
         this.canvas.removeEventListener('mousemove', this._onMouseMove);
         this.canvas.removeEventListener('mouseleave', this._onMouseLeave);
+        this.canvas.removeEventListener('touchstart', this._onTouchMove);
+        this.canvas.removeEventListener('touchmove', this._onTouchMove);
+        this.canvas.removeEventListener('touchend', this._onTouchEnd);
     }
 }

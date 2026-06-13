@@ -447,6 +447,75 @@ body {
   display: none;
 }
 
+/* Example soundings on the landing page */
+.fetch-examples {
+  width: 100%;
+  max-width: 580px;
+  margin-top: var(--space-lg);
+}
+
+.examples-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-bottom: var(--space-md);
+}
+
+.examples-divider::before,
+.examples-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.examples-divider span {
+  padding: 0 var(--space-md);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.examples-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: var(--space-sm);
+}
+
+.btn-example {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+  font-family: var(--font-sans);
+}
+
+.btn-example:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-accent);
+  background: var(--bg-card-hover);
+}
+
+.btn-example .example-station {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.btn-example .example-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .fetch-hint {
   margin-top: var(--space-lg);
   padding-top: var(--space-md);
@@ -675,6 +744,12 @@ body {
   transform: translateY(-2px);
   border-color: var(--border-accent);
   background: var(--bg-card-hover);
+}
+
+.param-card:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-color: var(--border-accent);
 }
 
 .param-card .param-label {
