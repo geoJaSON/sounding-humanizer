@@ -239,16 +239,18 @@ function processData(parsed) {
     stationNameEl.textContent = parsed.station || 'Unknown Station';
     stationTimeEl.textContent = parsed.time || '';
 
-    // Severity badge
+    // Severity badge. Worded as the environment's *potential* rather than a
+    // "Risk" level, so it isn't mistaken for an official SPC outlook category.
     const sev = humanized.severity;
     severityBadge.dataset.level = sev.level;
-    severityBadge.querySelector('.badge-text').textContent = `${sev.label} Risk`;
+    severityBadge.querySelector('.badge-text').textContent = `Severe potential: ${sev.label}`;
+    severityBadge.title = 'How supportive this sounding’s environment is for severe storms if they form. Not a forecast or an official outlook.';
 
     // Enrich the canvas labels for screen readers with the actual figures.
     const station = parsed.station || 'this station';
     document.getElementById('skewt-canvas')?.setAttribute('aria-label',
         `Skew-T log-P diagram for ${station}. SBCAPE ${analysis.sbcape} joules per kilogram, ` +
-        `CIN ${analysis.sbcin} joules per kilogram, LCL ${analysis.lclHeight} meters. ${sev.label} severe risk.`);
+        `CIN ${analysis.sbcin} joules per kilogram, LCL ${analysis.lclHeight} meters. Severe potential: ${sev.label}.`);
     document.getElementById('hodo-canvas')?.setAttribute('aria-label',
         `Hodograph for ${station}. 0 to 6 kilometer bulk shear ${analysis.shear06} knots, ` +
         `0 to 1 kilometer storm-relative helicity ${analysis.srh01} square meters per second squared.`);
@@ -280,29 +282,36 @@ function processData(parsed) {
 // ---- Render Parameters ----
 function renderParams(a) {
     const params = [
-        { label: 'SBCAPE', value: a.sbcape, unit: 'J/kg', max: 6000, color: capeColor(a.sbcape), desc: 'Surface-Based Convective Available Potential Energy. Measures total instability for air parcels originating from the surface.' },
-        { label: 'MLCAPE', value: a.mlcape, unit: 'J/kg', max: 6000, color: capeColor(a.mlcape), desc: 'Mixed-Layer CAPE. Measures instability for air parcels mixed over the lowest 100 mb, often a better representation of afternoon storm potential.' },
-        { label: 'CIN', value: a.sbcin, unit: 'J/kg', max: 300, color: '#3b82f6', desc: 'Convective Inhibition. The negative energy or cap that suppresses rising parcels. Large negative values mean a strong cap and fewer storms; near-zero means storms can form easily.' },
-        { label: 'LCL', value: a.lclHeight, unit: 'm', max: 3000, color: '#06b6d4', desc: 'Lifted Condensation Level. The estimated height of cloud bases. Lower LCLs (under 1000m) are generally more favorable for tornadoes.' },
-        { label: '0-6km Shear', value: a.shear06, unit: 'kt', max: 80, color: shearColor(a.shear06), desc: 'Deep-layer wind shear. Critical for thunderstorm organization and supercell development.' },
-        { label: '0-1km Shear', value: a.shear01, unit: 'kt', max: 50, color: shearColor(a.shear01), desc: 'Low-level wind shear. Important for low-level mesocyclone and tornado potential.' },
-        { label: '0-1km SRH', value: a.srh01, unit: 'm²/s²', max: 500, color: srhColor(a.srh01), desc: 'Storm-Relative Helicity in the lowest 1km. Measures the potential for cyclonic updraft rotation.' },
-        { label: '0-3km SRH', value: a.srh03, unit: 'm²/s²', max: 600, color: srhColor(a.srh03), desc: 'Storm-Relative Helicity in the lowest 3km. Measures overall potential for mid-level updraft rotation.' },
-        { label: 'STP', value: a.stp, unit: '', max: 10, color: stpColor(a.stp), desc: 'Significant Tornado Parameter. A composite index combining CAPE, LCL, SRH, and Shear to assess significant tornado risk.' },
-        { label: 'SCP', value: a.scp, unit: '', max: 10, color: stpColor(a.scp), desc: 'Supercell Composite Parameter. A composite index of CAPE, SRH, and Bulk Shear indicating conditions favorable for supercells.' },
-        { label: 'PW', value: a.pw.toFixed(2), unit: 'in', max: 3, color: '#3b82f6', desc: 'Precipitable Water. Total column moisture. High values indicate heavy rain potential; low values increase dry microburst risk.' },
-        { label: '700-500 LR', value: a.lr700_500, unit: '°C/km', max: 10, color: '#f97316', desc: 'Mid-level Lapse Rate. Rate of cooling with height. Steeper rates (over 7°C/km) enhance updraft acceleration and large hail potential.' },
+        { label: 'SBCAPE', value: a.sbcape, unit: 'J/kg', max: 6000, color: capeColor(a.sbcape), desc: 'Surface-Based Convective Available Potential Energy: the buoyant energy available to an air parcel lifted from the surface.' },
+        { label: 'MLCAPE', value: a.mlcape, unit: 'J/kg', max: 6000, color: capeColor(a.mlcape), desc: 'Mixed-Layer CAPE: instability for a parcel representing the lowest 100 hPa mixed together. Usually a more representative measure of afternoon storm potential than SBCAPE.' },
+        { label: 'MUCAPE', value: a.mucape, unit: 'J/kg', max: 6000, color: capeColor(a.mucape), desc: 'Most-Unstable CAPE: instability for the most buoyant parcel in the lowest 300 hPa. Much larger than SBCAPE means the instability is elevated above a stable surface layer.' },
+        { label: 'SBCIN', value: a.sbcin, unit: 'J/kg', max: 300, color: '#3b82f6', desc: 'Surface-Based Convective Inhibition: the negative energy (the “cap”) a surface parcel must overcome to reach free convection. Large negative values mean a strong cap; near zero means storms can form easily.' },
+        { label: 'LCL', value: a.lclHeight, unit: 'm', max: 3000, color: '#06b6d4', desc: 'Lifted Condensation Level: the approximate cloud-base height above ground. LCLs under about 1000 m are more favorable for tornadoes.' },
+        { label: '0–6 km Shear', value: a.shear06, unit: 'kt', max: 80, color: shearColor(a.shear06), desc: 'Deep-layer bulk wind shear: the change in wind between the surface and 6 km. Critical for storm organization; roughly 35–40 kt or more supports supercells.' },
+        { label: '0–1 km Shear', value: a.shear01, unit: 'kt', max: 50, color: shearColor(a.shear01), desc: 'Low-level bulk wind shear between the surface and 1 km. Important for low-level rotation and tornado potential.' },
+        { label: '0–1 km SRH', value: a.srh01, unit: 'm²/s²', max: 500, color: srhColor(a.srh01), desc: 'Storm-Relative Helicity in the lowest 1 km: the low-level spin available to a right-moving supercell. Closely tied to tornado potential.' },
+        { label: '0–3 km SRH', value: a.srh03, unit: 'm²/s²', max: 600, color: srhColor(a.srh03), desc: 'Storm-Relative Helicity in the lowest 3 km: the potential for a supercell’s updraft to rotate (a mesocyclone).' },
+        { label: 'STP', value: a.stp, unit: '', max: 10, color: stpColor(a.stp), desc: 'Significant Tornado Parameter (fixed layer): combines SBCAPE, LCL height, 0–1 km SRH, 0–6 km shear and SBCIN. Values above 1 favor significant (EF2+) tornadoes if supercells form.' },
+        { label: 'SCP', value: a.scp, unit: '', max: 10, color: scpColor(a.scp), desc: 'Supercell Composite Parameter: combines MUCAPE, 0–3 km SRH and 0–6 km shear. Values above 1 favor supercells.' },
+        { label: 'PW', value: a.pw, digits: 2, unit: 'in', max: 3, color: '#3b82f6', desc: 'Precipitable Water: total water vapor in the column. High values mean heavy-rain potential; very low values favor high-based storms and dry downbursts.' },
+        { label: '700–500 LR', value: a.lr700_500, unit: '°C/km', max: 10, color: '#f97316', desc: 'Mid-level lapse rate: how fast temperature falls with height between 700 and 500 hPa. Steeper than about 7 °C/km boosts updraft strength and large-hail potential.' },
     ];
 
     paramsBar.innerHTML = params.map(p => {
-        const pct = Math.min(100, Math.abs(parseFloat(p.value)) / p.max * 100);
+        const has = p.value !== null && p.value !== undefined && Number.isFinite(p.value);
+        const display = !has ? '—'
+            : p.digits ? p.value.toFixed(p.digits)
+            : Math.abs(p.value) >= 1000 ? Math.round(p.value).toLocaleString('en-US')
+            : String(p.value);
+        const pct = has ? Math.min(100, Math.abs(p.value) / p.max * 100) : 0;
         // Focusable + labelled so the description (previously a mouse-only title
         // tooltip) is reachable by keyboard and screen readers.
-        const aria = esc(`${p.label}: ${p.value}${p.unit ? ' ' + p.unit : ''}. ${p.desc}`);
+        const spoken = has ? `${display}${p.unit ? ' ' + p.unit : ''}` : 'not available';
+        const aria = esc(`${p.label}: ${spoken}. ${p.desc}`);
         return `
       <div class="param-card" tabindex="0" title="${esc(p.desc)}" aria-label="${aria}">
         <div class="param-label">${p.label}</div>
-        <div class="param-value">${p.value}<span class="param-unit">${p.unit}</span></div>
+        <div class="param-value">${display}${has ? `<span class="param-unit">${p.unit}</span>` : ''}</div>
         <div class="param-bar" style="width:${pct}%;background:${p.color};"></div>
       </div>
     `;
@@ -340,11 +349,20 @@ function srhColor(s) {
     return '#22c55e';
 }
 
+// STP/SCP colors use the same breakpoints as the briefing text.
 function stpColor(s) {
     if (s >= 6) return '#a855f7';
     if (s >= 3) return '#ef4444';
     if (s >= 1) return '#f97316';
-    if (s > 0) return '#eab308';
+    if (s >= 0.3) return '#eab308';
+    return '#22c55e';
+}
+
+function scpColor(s) {
+    if (s >= 8) return '#a855f7';
+    if (s >= 4) return '#ef4444';
+    if (s >= 1) return '#f97316';
+    if (s >= 0.5) return '#eab308';
     return '#22c55e';
 }
 
@@ -359,6 +377,13 @@ function renderAnalysis(h) {
       <div class="card-body" style="font-size:0.95rem;line-height:1.8;">
         ${h.headline}
       </div>
+      ${h.hazards.length ? `
+      <div class="hazards">
+        <h4 class="hazards-title">Likely hazards if storms form</h4>
+        <ul class="hazard-list">
+          ${h.hazards.map(z => `<li><span class="hazard-name">${z.name}</span><span class="hazard-text">${z.text}</span></li>`).join('')}
+        </ul>
+      </div>` : ''}
     </div>
   `;
 

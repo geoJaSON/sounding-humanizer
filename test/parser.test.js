@@ -60,6 +60,34 @@ test('drops levels that have thermo data but no wind columns', () => {
     }
 });
 
+test('skips rows with a gap mid-row instead of shifting columns', () => {
+    // The 850 hPa row is missing DRCT/SKNT but has the trailing THTA/THTE/THTV
+    // columns, so naive token mapping would read THTA as the wind direction.
+    const raw = `   PRES   HGHT   TEMP   DWPT   RELH   MIXR   DRCT   SKNT   THTA   THTE   THTV
+ 1000.0    100   25.0   20.0     74  15.30    180     10  300.0  340.0  302.0
+  925.0    800   20.0   15.0     72  11.80    200     20  302.0  336.0  304.0
+  850.0   1500   15.0   10.0     71   9.20                305.0  330.0  307.0
+  700.0   3200    5.0   -5.0     48   3.40    250     40  315.0  330.0  316.0
+  500.0   5800  -10.0  -20.0     45   1.10    270     50  330.0  338.0  331.0`;
+
+    const { levels } = parseSounding(raw);
+    assert.equal(levels.length, 4);
+    assert.ok(!levels.some((l) => l.pressure === 850));
+});
+
+test('drops duplicate pressure levels', () => {
+    const raw = `PRES   HGHT   TEMP   DWPT   DRCT   SKNT
+1000.0    100   25.0   20.0    180    10
+1000.0    100   25.0   20.0    180    10
+ 925.0    800   20.0   15.0    200    20
+ 850.0   1500   15.0   10.0    220    30
+ 700.0   3200    5.0   -5.0    250    40`;
+
+    const { levels } = parseSounding(raw);
+    assert.equal(levels.length, 4);
+    assert.deepEqual(levels.map((l) => l.pressure), [1000, 925, 850, 700]);
+});
+
 test('rejects out-of-range sentinel values', () => {
     const raw = `PRES   HGHT   TEMP   DWPT   DRCT   SKNT
 1000.0    100   25.0   20.0    180    10

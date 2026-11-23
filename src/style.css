@@ -902,6 +902,49 @@ body {
   font-weight: 600;
 }
 
+/* Hazards list (At a Glance card) */
+.hazards {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+}
+
+.hazards-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-sm);
+}
+
+.hazard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.hazard-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.hazard-name {
+  min-width: 6.5em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hazard-text {
+  flex: 1 1 16em;
+}
+
 /* ============================================
    Scrollbar
    ============================================ */

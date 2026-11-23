@@ -236,13 +236,25 @@ export class SkewTDiagram {
         const ctx = this.ctx;
         const parcel = this.analysis.sbParcel;
         const levels = this.data;
+        const { lfcPressure, elPressure } = this.analysis;
+        // Without an LFC the parcel never convects freely: no CAPE, and the
+        // negative area isn't CIN in any meaningful sense — shade nothing.
+        if (!lfcPressure || !elPressure) return;
 
-        // Draw CAPE (positive buoyancy) and CIN (negative buoyancy) areas
+        // Shade CAPE only between the LFC and EL, and CIN only below the LFC.
+        // (Negative area above the EL, or positive area below the LCL, is
+        // neither and would mislead.)
         for (let i = 0; i < parcel.length - 1; i++) {
             const p1 = parcel[i].pressure;
             const p2 = parcel[i + 1].pressure;
             const pt1 = parcel[i].temp;
             const pt2 = parcel[i + 1].temp;
+            // p1 is the layer bottom (higher pressure), p2 its top. A layer
+            // straddling the LFC or EL overlaps both regions and is shaded by
+            // its sign below.
+            const inCAPE = p2 < lfcPressure && p1 > elPressure;
+            const inCIN = p1 > lfcPressure;
+            if (!inCAPE && !inCIN) continue;
 
             // Find env temp
             let et1 = null, et2 = null;
@@ -260,6 +272,7 @@ export class SkewTDiagram {
             if (et1 === null || et2 === null) continue;
 
             const isPositive = (pt1 + pt2) / 2 > (et1 + et2) / 2;
+            if (isPositive ? !inCAPE : !inCIN) continue;
 
             ctx.fillStyle = isPositive ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.1)';
             ctx.beginPath();
@@ -418,8 +431,11 @@ export class SkewTDiagram {
         const a = this.analysis;
 
         const markers = [];
-        if (a.lclPressure) markers.push({ p: a.lclPressure, label: 'LCL', color: '#06b6d4' });
-        if (a.lfcPressure) markers.push({ p: a.lfcPressure, label: 'LFC', color: '#f59e0b' });
+        // When the parcel is buoyant right at cloud base the LFC equals the
+        // LCL; draw one combined marker instead of overprinting two labels.
+        const lfcAtLcl = a.lfcPressure && a.lclPressure && Math.abs(a.lfcPressure - a.lclPressure) < 3;
+        if (a.lclPressure) markers.push({ p: a.lclPressure, label: lfcAtLcl ? 'LCL = LFC' : 'LCL', color: '#06b6d4' });
+        if (a.lfcPressure && !lfcAtLcl) markers.push({ p: a.lfcPressure, label: 'LFC', color: '#f59e0b' });
         if (a.elPressure) markers.push({ p: a.elPressure, label: 'EL', color: '#a855f7' });
 
         ctx.font = 'bold 10px Inter, sans-serif';

@@ -7,11 +7,11 @@ Fetch an upper-air sounding, see it as an interactive **Skew-T / Log-P** and **h
 ## Features
 
 - **Live data** from the University of Wyoming upper-air archive, by station and date/time (00Z / 12Z).
-- **Bundled examples** — explore the app instantly (and offline) with three archetype profiles: tornadic supercell, elevated/derecho, and summer pulse.
+- **Bundled examples** — explore the app instantly (and offline) with three idealized archetype profiles: Plains tornadic supercell, elevated (hail) storms north of a warm front, and summer pulse storms. These are synthetic but physically consistent (hypsometric heights, realistic temperatures), not observed soundings.
 - **Interactive Skew-T** — temperature/dewpoint traces, dry/moist adiabats, lifted parcel path, CAPE/CIN shading, wind barbs, and LCL/LFC/EL markers.
 - **Interactive hodograph** — height-colored wind trace, Bunkers storm-motion vectors, and 0–3 km SRH shading.
 - **Computed parameters** — SBCAPE/MLCAPE/MUCAPE, CIN, LCL/LFC/EL, 0–1 & 0–6 km shear, 0–1 & 0–3 km SRH, STP, SCP, PW, and lapse rates.
-- **Humanized briefing** — instability, wind shear, severe potential, and moisture each explained in prose with a severity rating.
+- **Humanized briefing** — an at-a-glance summary with the likely hazards if storms form, plus instability, wind shear, supercell/tornado potential, and moisture each explained in prose with a rating. It recognizes elevated instability and high-shear/low-CAPE setups, and names the ingredient holding STP down.
 
 ## Getting started
 
@@ -33,7 +33,8 @@ fetch (api/sounding.js)  →  parse (src/parser)  →  analyze (src/calc/thermo.
                                                       └→ humanize (src/analysis/humanizer.js)
 ```
 
-- **`src/calc/thermo.js`** — thermodynamic & kinematic engine. Buoyancy is integrated from **virtual temperature** (Doswell & Rasmussen 1994). STP and SCP follow the SPC fixed-layer definitions (shear terms in m/s, with the standard clamps).
+- **`src/calc/thermo.js`** — thermodynamic & kinematic engine. Buoyancy is integrated from **virtual temperature** (Doswell & Rasmussen 1994), splitting layers at zero crossings. The **LFC** is the first level *at or above the LCL* where the parcel becomes buoyant (so a superadiabatic surface layer can't hide a cap); CAPE is the positive area from LFC to EL and CIN the negative area below the LFC. The **mixed-layer parcel** averages potential temperature and mixing ratio over the lowest 100 hPa. Storm motion uses the **Bunkers (2000)** method (0–6 km non-pressure-weighted mean wind, 0–0.5 km → 5.5–6 km shear vector), and SRH layers are closed with interpolated winds at their boundaries. STP and SCP follow the SPC fixed-layer definitions (shear terms in m/s, with the standard clamps).
+- **`src/analysis/humanizer.js`** — turns the numbers into the briefing. Wording is deliberately conditional: a sounding describes the environment storms would form in, not whether they will.
 - **`src/parser/sounding.js`** — parses the UWyo `TEXT:LIST` format, mapping columns from the header and dropping levels with missing/sentinel values.
 - **`src/viz/`** — canvas renderers. The static grid and data traces are cached to an offscreen canvas, so hovering only re-blits + draws the cursor (no adiabat recomputation per frame).
 

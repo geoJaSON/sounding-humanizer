@@ -6,7 +6,7 @@
 /**
  * @typedef {Object} SoundingLevel
  * @property {number} pressure  - hPa
- * @property {number} height    - meters AGL
+ * @property {number} height    - meters MSL (geopotential height)
  * @property {number} temp      - °C
  * @property {number} dewpoint  - °C
  * @property {number} windDir   - degrees
@@ -32,12 +32,14 @@ export function parseSounding(text, stationName = 'Unknown', time = '') {
     // Try to detect header to find column mapping
     let headerIndex = -1;
     let colMap = null;
+    let headerCols = 0;
 
     for (let i = 0; i < Math.min(lines.length, 20); i++) {
         const upper = lines[i].toUpperCase();
         if (upper.includes('PRES') && (upper.includes('HGHT') || upper.includes('HGT')) && upper.includes('TEMP')) {
             headerIndex = i;
             const tokens = upper.split(/\s+/);
+            headerCols = tokens.length;
             colMap = {};
             tokens.forEach((t, idx) => {
                 if (t === 'PRES' || t === 'PRESSURE') colMap.pres = idx;
@@ -64,6 +66,11 @@ export function parseSounding(text, stationName = 'Unknown', time = '') {
 
         const tokens = line.split(/[\s,;]+/).filter(t => t.length > 0);
         if (tokens.length < 6) continue;
+        // UWyo pads missing values with blanks, so a row with a gap has fewer
+        // tokens than the header and every later column shifts left (e.g. a
+        // missing DWPT would make DRCT read as the dewpoint). Such rows can't
+        // be mapped unambiguously — skip them.
+        if (colMap && tokens.length < headerCols) continue;
 
         // All tokens should be numbers
         const nums = tokens.map(Number);
@@ -105,8 +112,12 @@ export function parseSounding(text, stationName = 'Unknown', time = '') {
         });
     }
 
-    // Sort by pressure descending (surface first)
+    // Sort by pressure descending (surface first), then drop repeated pressure
+    // levels — a zero-thickness layer breaks log-pressure interpolation.
     levels.sort((a, b) => b.pressure - a.pressure);
+    for (let i = levels.length - 1; i > 0; i--) {
+        if (levels[i].pressure === levels[i - 1].pressure) levels.splice(i, 1);
+    }
 
     // Try to extract station/time from text header
     let parsedStation = stationName;
